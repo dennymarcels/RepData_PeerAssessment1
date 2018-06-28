@@ -1,25 +1,136 @@
----
-title: "Reproducible Research: Peer Assessment 1"
-output: 
-  html_document:
-    keep_md: true
----
+REPRODUCIBLE RESEARCH: PEER ASSIGNMENT 1
+========================================
 
+This document concerns the generation of statistics and the processing of data about walking activity, measured as number of steps taken in 5-minute intervals, monitored ininterruptly for two months in a single individual.
 
 ## Loading and preprocessing the data
 
+Once you make sure you are working in the directory containing the data (file "activity.zip"), load the data into the variable *steps*:
 
+```{r}
+steps <- read.csv(unzip("activity.zip"))
+```
+
+Next, we should convert the data in the *date* column into date format:
+
+```{r}
+steps$date <- as.Date(steps$date)
+```
 
 ## What is mean total number of steps taken per day?
 
+We will be using the package **dplyr** to generate summaries. First, we will generate a histogram with the *total number of steps taken per day*:
 
+```{r results='hide'}
+library(dplyr)
+```
+
+```{r}
+prob1 <- steps %>% group_by(date) %>% summarise(sum(steps, na.rm=T))
+barplot(prob1$`sum(steps, na.rm = T)`, names.arg = prob1$date, main = "Total number of steps per day", xlab = "Date", ylab = "Total number of steps", cex.axis=0.6, cex.names=0.6)
+```
+
+Next, let us check the *mean* and *median* of these totals:
+
+```{r}
+mean(prob1$`sum(steps, na.rm = T)`)
+```
+
+```{r}
+median(prob1$`sum(steps, na.rm = T)`)
+```
 
 ## What is the average daily activity pattern?
 
+Let us see the *number of steps taken averaged by interval*:
 
+```{r}
+prob2 <- steps %>% group_by(interval) %>% summarise(mean(steps, na.rm=T))
+plot(prob2, type="l", cex.axis = 0.6, ylab = "Average steps taken", main = "Average steps taken by interval")
+```
+
+Which interval contains the *maximum average*?
+
+```{r}
+prob2$interval[which.max(prob2$`mean(steps, na.rm = T)`)]
+```
 
 ## Imputing missing values
 
+How many NA's are there in the original dataset?
 
+```{r}
+sum(is.na(steps$steps))
+```
+
+We will fill these NA values with the *mean of steps for that interval* (which is already stored in the variable *prob2*), and store the result in a new dataset called *steps_full*.
+
+First, let us *arrange the original dataset grouped by interval*, which facilitates a step further on:
+
+```{r}
+prob3 <- steps %>% arrange(.by_group=interval)
+```
+
+Now let us build a vector reporting *how many times each interval* is included in the dataset (which equals how many days each interval had information for):
+
+```{r}
+n <- as.vector(table(steps$interval))
+```
+
+We now build another vector containing the *mean of steps for that interval* repeated *n* times (one time for each date):
+
+```{r}
+vector <- rep(prob2$`mean(steps, na.rm = T)`, n)
+```
+
+Next, let us generate a vector stating the *number of the row containing an NA* in the column *step*. Then, let us change that value for the one in the *vector* variable corresponding to that same row:
+
+```{r}
+which <- which(is.na(prob3$steps))
+prob3$steps[which] <- vector[which]
+```
+
+Finally, only because we are perfectionits, let us *rearrange the dataset to the original arrangement* (sorted by date):
+
+```{r}
+prob3 %>% arrange(.by_group = date) -> steps_full
+```
+
+Let us repeat the histogram drawn in the first problem, but now with the imputed missing data:
+
+```{r}
+prob3b <- steps_full %>% group_by(date) %>% summarise(sum(steps))
+barplot(prob3b$`sum(steps)`, names.arg = prob3b$date, main = "Total number of steps per day", xlab = "Date", ylab = "Total number of steps", cex.axis=0.6, cex.names=0.6)
+```
+
+Let us check the *mean* and the *median* for this new dataset:
+
+```{r}
+mean(prob3b$`sum(steps)`)
+```
+
+```{r}
+median(prob3b$`sum(steps)`)
+```
+
+Both values are higher than when ignoring missing values.
 
 ## Are there differences in activity patterns between weekdays and weekends?
+
+First we should create a vector to represent if the data in each row concerns a weekday or a weekend. We will be adding this vector to a new column called *which_day*. (I apologize for the weekday names in Portuguese, I **could not** change this feture >:( ).Then we will group the day by *which_day*, then by *interval*, and summarize as a *mean*.
+
+```{r}
+prob4 <- steps_full
+prob4$which_day <- ifelse(weekdays(prob4$date) %in% c("sábado", "domingo"), "weekend", "weekday")
+prob4b <- prob4 %>% group_by(which_day, interval) %>% summarise(mean(steps))
+```
+
+We will now generate a plot of the *means* by *interval*, separated by *which_day*.
+
+```{r}
+par(mfrow=c(2,1))
+plot(prob4b$interval[prob4b$which_day == "weekday"], prob4b$`mean(steps)`[prob4b$which_day == "weekday"], type = "l", ylim = c(0, max(prob4b$`mean(steps)`)), xlab = "Interval", ylab = "Average of steps taken", main = "Weekdays")
+plot(prob4b$interval[prob4b$which_day == "weekend"], prob4b$`mean(steps)`[prob4b$which_day == "weekend"], type = "l", ylim = c(0, max(prob4b$`mean(steps)`)),xlab = "Interval", ylab = "Average of steps taken", main = "Weekends")
+```
+
+Since we set the y-axis to cover the same limit values, we can be sure there is a difference between the activity patterns in weekdays and weekends.
